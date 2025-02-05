@@ -1,0 +1,11 @@
+name: pybullet_env
+channels:
+  - conda-forge
+dependencies:
+  - python=3.9
+  - pybullet
+  - pinocchio
+  - matplotlib
+  - libgcc-ng
+  - libstdcxx-ng
+  - mesa-libgl-cos6-x86_64
