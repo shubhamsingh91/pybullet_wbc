@@ -3,6 +3,7 @@ import pybullet_data
 import numpy as np
 import time
 import wbc as wbc
+import math
 
 # If you want a small QP solver in Python, you can use cvxpy or quadprog.
 # For example: 
@@ -27,11 +28,17 @@ p.setGravity(0, 0, -9.81)
 num_joints = p.getNumJoints(robot_id)
 print("\nnum_joints = ", num_joints)
 
+# Set each joint to its home position
+home_q = [0, -40, 0, 90, 0, 40, 0]  # Degrees
+home_q_rad = [math.radians(angle) for angle in home_q]
+
+for i in range(num_joints-1):
+    p.resetJointState(robot_id, i, home_q_rad[i], targetVelocity = 0.0)
+
 #Compute DoF by counting movable joints
 dof = sum(1 for i in range(num_joints) if p.getJointInfo(robot_id, i)[2] in [p.JOINT_REVOLUTE, p.JOINT_PRISMATIC])
 
 print(f"Degrees of Freedom (DoF): {dof}")
-
 
 # Print joint info
 for joint_index in range(num_joints):
@@ -40,9 +47,6 @@ for joint_index in range(num_joints):
 
 print("Robot ID:", robot_id)
 # print link ids
-
-
-
 
 def set_pos_control(des_pos):
     for joint_index in range(len(des_pos)):
@@ -56,21 +60,55 @@ pos, orn = wbc.get_end_effector_pose(robot_id, END_EFFECTOR_LINK)
 print("End-effector position:", pos)
 print("End-effector orientation:", orn)
 
-q = np.random.uniform(-1.0, 1.0, size=dof).tolist()
-q_dot = np.random.uniform(-1.0, 1.0, size=dof).tolist()
+
+q_list = []
+qd_list = []
+for j in range(dof):
+    joint_info = p.getJointState(robot_id, j)
+    q_list.append(joint_info[0])
+    qd_list.append(joint_info[1])
+
+q = np.array(q_list)
+q_dot = np.array(qd_list)
+
 print("Joint positions:", q)
 print("Joint velocities:", q_dot)
 
-jac_t, jac_r = wbc.get_jacobian(robot_id, END_EFFECTOR_LINK, 
-                                       q, q_dot, dof)
-set_pos_control(q)
-print("Jacobian t:", jac_t)
+jac_t, jac_r = wbc.get_jacobian(robot_id, dof, END_EFFECTOR_LINK, q, q_dot )
+zero_vec = [0] * dof  # Acceleration vector (set to 0)
 
+# jac_t, jac_r = p.calculateJacobian(robot_id, END_EFFECTOR_LINK, [0, 0, 0],
+#                                    q.tolist(), q_dot.tolist(), zero_vec)
 
+# set_pos_control(q)
+# print("Jacobian t:", jac_t)
 
-for i in range(10000):
-    p.stepSimulation()
-    time.sleep(1./240.)
+# compute task desired acceleration
+
+# pos_des = np.array([0.5, 0.5, 0.5])
+# pos_cur = pos
+# vel_cur = np.array([0.0, 0.0, 0.0])
+# accel_des = wbc.compute_task_desired_accel(pos_des, pos_cur, vel_cur)
+
+# for i in range(10000):
+#     p.stepSimulation()
+#     time.sleep(1./240.)
+#     pos_cur, orn = wbc.get_end_effector_pose(robot_id, END_EFFECTOR_LINK)
+#     vel_cur, ang_vel = wbc.get_end_effector_velocity(robot_id, END_EFFECTOR_LINK)
+
+#     accel_des = wbc.compute_task_desired_accel(pos_des, pos_cur, vel_cur)
+#     print("Current position:", pos_cur)
+#     print("Current velocity:", vel_cur)
+#     print("Desired acceleration:", accel_des)
+
+#     link_state = p.getLinkState(
+#         bodyUniqueId=robot_id, 
+#         linkIndex=END_EFFECTOR_LINK, 
+#         computeLinkVelocity=1
+#     )
+
+wbc.main_control_loop(robot_id, dof, END_EFFECTOR_LINK, pos)
+
     # input("Press Enter to exit...")  # Wait for user input
     # p.disconnect()  # Close PyBullet
 
