@@ -77,5 +77,5 @@ print("Joint velocities:", q_dot)
 jac_t, jac_r = wbc.get_jacobian(robot_id, dof, END_EFFECTOR_LINK, q, q_dot )
 zero_vec = [0] * dof  # Acceleration vector (set to 0)
 pos_des = np.array([0.5, 0.5, 0.5])  # Desired position
-vel_des = np.array([0.0, 0.0, 0.1])  # Desired position
-wbc.main_control_loop(robot_id, dof, END_EFFECTOR_LINK, pos_des,vel_des)
+vel_des = np.array([0.0, 0.0, 0.0])  # Desired position
+wbc.main_control_loop(robot_id, dof, END_EFFECTOR_LINK,vel_des)
