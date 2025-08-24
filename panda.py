@@ -1,6 +1,9 @@
 import pybullet as p
 import pybullet_data
 import time
+from IK_test import IK
+import pinocchio as pin
+import numpy as np
 
 # Connect to PyBullet
 client1 = p.DIRECT
@@ -32,14 +35,33 @@ def set_pos_control(des_pos):
                                     controlMode=p.POSITION_CONTROL,
                                     targetPosition=des_pos[joint_index])
 
+# make pinocchio model and run IK
+urdf_path = "flexiv_rizon4_kinematics.urdf"
+model = pin.buildModelFromUrdf(urdf_path)
+data = model.createData()
+ee_frame_id = model.getFrameId("flange")  # End-effector frame id
 
-# Run the simulation for a while
-# position control            
-for i in range(10000):
-    des_pos =  [1.57+i*0.001,1.57,1.571,1.57,1.57,1.57+i*0.001,i*0.001]
-    set_pos_control(des_pos)
+q_home = np.array([0, -40, 0, 90, 0, 40, 0], dtype=np.float64)  # Home configuration in radians
+
+# start simulation at home, take user input for x_des , run IK and go to pose
+p.setRealTimeSimulation(1)
+while True:
     p.stepSimulation()
-    time.sleep(1./240.)
+    time.sleep(0.01)  # Sleep to control simulation speed
+    
+    # Get user input for desired end-effector position
+    x_des_input = input("Enter desired end-effector position as x,y,z (or 'exit' to quit): ")
+    
+    if x_des_input.lower() == 'exit':
+        break
+    
+    try:
+        x_des = np.array([float(coord) for coord in x_des_input.split(',')], dtype=np.float64)
+        q_final = IK(model, data, x_des, ee_frame_id, q_home)
+        set_pos_control(q_final)
+        print(f"Moving to desired position: {x_des}")
+    except Exception as e:
+        print(f"Error: {e}. Please enter valid coordinates.")
 
 # Disconnect
 p.disconnect()

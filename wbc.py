@@ -178,7 +178,6 @@ def get_joint_state(p,robot,joint):
     temp1 =p.getJointState(robot,joint)   
     return temp1[0],temp1[1], temp1[2:6]     
 
-
 def get_all_joint_states(p,robot,dof):
     q=[0]*dof
     qd=[0]*dof
@@ -329,7 +328,6 @@ def wbc_qp_step_v2(robot_id, dof, end_eff_link, pos_des, vel_des, q_ddot_min=-10
         print("cost:", result)
 
     return tau.value, result, qddot_var.value  # Return optimized torques and task cost
-
 
 def main_control_loop(robot_id, dof, end_eff_link, vel_des):
     global pos_des
