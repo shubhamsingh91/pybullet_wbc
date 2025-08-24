@@ -13,6 +13,16 @@ def computeFK(model, data, q, ee_frame_id):
 
     return data.oMf[ee_frame_id].translation
 
+def computeFullFK(model, data, q, ee_frame_id):
+    """
+    Compute Full Forward Kinematics for the given model and configuration.
+    Returns the full pose of the end-effector frame.
+    """
+    pin.forwardKinematics(model, data, q)
+    pin.updateFramePlacements(model, data)
+
+    return data.oMf[ee_frame_id]  # Full SE3 pose of the end-effector frame
+
 def computeJac(model, data, q, ee_frame_id):
     """
     Compute the Jacobian for the end-effector frame.
@@ -28,6 +38,15 @@ def computeJinv(model, data, q, ee_frame_id):
     """
     J = computeJac(model, data, q, ee_frame_id)
     J_inv = np.linalg.pinv(J)  # Pseudo-inverse of the Jacobian
+    return J_inv
+
+def computeFullJinvlocal(model, data, q, ee_frame_id):
+    """
+    Compute the full inverse Jacobian for the end-effector frame.
+    Returns the full Jacobian including rotation.
+    """
+    J = pin.computeFrameJacobian(model, data, q, ee_frame_id, pin.ReferenceFrame.LOCAL)
+    J_inv = np.linalg.pinv(J)  # Pseudo-inverse of the full Jacobian
     return J_inv
 
 def IK(model, data, desired_ee_pos, ee_frame_id, q_guess=None, max_iterations=100000, tolerance=1e-6):
@@ -54,6 +73,14 @@ def IK(model, data, desired_ee_pos, ee_frame_id, q_guess=None, max_iterations=10
     print("Did not converge within the maximum number of iterations.")
     print("Final position:", computeFK(model, data, q, ee_frame_id))
     return q
+
+def calcJacRank(model, data, q):
+    """
+    Calculate the rank of the Jacobian for the given configuration.
+    """
+    J = computeJac(model, data, q, model.getFrameId("flange"))
+    rank = np.linalg.matrix_rank(J)
+    return rank
 
 # Load the robot model
 urdf_path = "flexiv_rizon4_kinematics.urdf"
@@ -110,3 +137,58 @@ print("\n Desired End-Effector Position:", desired_ee_pos)
 
 q_final = IK(model, data, desired_ee_pos, ee_frame_id)
 print("\n Final Joint Configuration:", q_final)
+
+# calculate the rank of the jacobian
+print("\n Calculate Jacobian Rank")
+q = pin.randomConfiguration(model)
+jacobian_rank = calcJacRank(model, data, q)
+print("Jacobian Rank:", jacobian_rank)
+
+# Find singular configurations
+print("\n Find Singular Configurations")
+# do a grid search in the joint space
+joint_ranges = model.lowerPositionLimit, model.upperPositionLimit
+
+print("Joint Ranges:", joint_ranges)
+# randomized sweep
+num_samples = 100
+samples = np.random.uniform(joint_ranges[0], joint_ranges[1], (num_samples, model.nq))
+singular_configs = []
+for sample in samples:
+    rank = calcJacRank(model, data, sample)
+    if rank < 3:  # If the rank is less than the number of velocity dimensions
+        print("---------------------------------------------")
+        print("Singular configuration found:", sample)
+        singular_configs.append(sample)
+
+# calculating the jount torque required to create a force at the ee
+f_des = np.array([100.1, 100.1, 100.1])  # Example desired force at the end-effector
+print("\nDesired Force at End-Effector:", f_des)
+print("\nCalculate Joint Torque for Desired Force at EE")
+J_ee = computeJac(model, data, q_final, ee_frame_id)
+
+tau = J_ee.T @ f_des  # Joint torque required to create the desired force at the end-effector
+
+print("Joint Torque for Desired Force at EE:", tau)
+
+# Full IK with both position and orientation
+print("-------------------------------------------")
+print("\nFull Inverse Kinematics with Position and Orientation")
+desired_ee_ori = Rot.from_euler('xyz', [0.1, 0.1, 0.1]).as_quat()  # Example desired orientation as quaternion
+oTd = pin.SE3(Rot.from_quat(desired_ee_ori).as_matrix(), desired_ee_pos)  # Desired end-effector pose in WORLD
+q_guess = np.zeros(model.nq)  # Initial guess for joint angles
+q = np.copy(q_guess)
+
+for i in range(1000):
+    oTb = computeFullFK(model, data, q, ee_frame_id)  # Current end-effector pose
+    error = oTb.inverse()*oTd  # Error in pose (SE3)
+    error_X = pin.log6(error)  # Convert SE3 error to twist (6D vector)
+    Jinv = computeFullJinvlocal(model, data, q, ee_frame_id)  # Full inverse Jacobian
+
+    if np.linalg.norm(error_X) < 1e-6:  # Check convergence
+        print(f"Converged in {i} iterations.")
+        print("Final joint configuration:", q)
+        break
+
+    deltaq = Jinv @ error_X  # Update joint angles
+    q += deltaq  # Update joint configuration

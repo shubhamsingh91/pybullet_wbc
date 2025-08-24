@@ -1,1 +1,8 @@
 Simple Whole Body Controller implementation for a manipulator system.
+
+To-do
+1. orientation task
+2. Clean-up
+2. Contact force constraints
+3. Multiple tasks with different weights
+4. MPC for point A to point B
