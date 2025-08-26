@@ -64,6 +64,9 @@ def IK(model, data, desired_ee_pos, ee_frame_id, q_guess=None, max_iterations=10
 
         if np.linalg.norm(error) < tolerance:
             print(f"Converged in {i} iterations.")
+            # wrap angles between -pi to pi
+            q = (q + np.pi) % (2 * np.pi) - np.pi
+            print("Final joint configuration in radians:", q)
             return q
 
         J_inv = computeJinv(model, data, q, ee_frame_id)
